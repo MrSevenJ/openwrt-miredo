@@ -1,0 +1,225 @@
+diff -uNr a/libteredo/debug.h b/libteredo/debug.h
+--- a/libteredo/debug.h	2009-03-01 04:17:14.000000000 +0800
++++ b/libteredo/debug.h	2018-12-04 20:47:33.229940363 +0800
+@@ -44,7 +44,7 @@
+ #   include <errno.h>
+ #   include <assert.h>
+ #   undef PTHREAD_MUTEX_INITIALIZER
+-#   define PTHREAD_MUTEX_INITIALIZER PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
++#   define PTHREAD_MUTEX_INITIALIZER {{{0}}} 
+ 
+ static inline int
+ d_pthread_mutex_init (pthread_mutex_t *mutex, pthread_mutexattr_t *pattr)
+@@ -57,7 +57,7 @@
+ 		pthread_mutexattr_init (&attr);
+ 	}
+ 
+-	pthread_mutexattr_settype (pattr, PTHREAD_MUTEX_ERRORCHECK_NP);
++	pthread_mutexattr_settype (pattr, 2);
+ 	int res = pthread_mutex_init (mutex, pattr);
+ 
+ 	if (pattr == &attr)
+diff -uNr a/libteredo/maintain.c b/libteredo/maintain.c
+--- a/libteredo/maintain.c	2009-09-06 17:18:24.000000000 +0800
++++ b/libteredo/maintain.c	2018-12-04 20:47:51.070092148 +0800
+@@ -141,7 +141,6 @@
+ 	/* TODO: fail instead of ignoring the packet? */
+ 	if (packet->auth_fail)
+ 	{
+-		syslog (LOG_ERR, _("Authentication with server failed."));
+ 		return EACCES;
+ 	}
+ 
+@@ -206,7 +205,6 @@
+ 	 || ((now.tv_sec == ts->tv_sec) && (now.tv_nsec > ts->tv_nsec)))
+ 	{
+ 		/* process stopped, CPU starved, or (ACPI, APM, etc) suspend */
+-		syslog (LOG_WARNING, _("Too much time drift. Resynchronizing."));
+ 		*ts = now;
+ 		return false;
+ 	}
+@@ -276,8 +274,6 @@
+ 			else
+ 			if (!is_ipv4_global_unicast (server_ip))
+ 			{
+-				syslog (LOG_ERR,
+-				        _("Teredo server has a non global IPv4 address."));
+ 			}
+ 			else
+ 			{
+@@ -340,13 +336,11 @@
+ 				/* No response from server */
+ 				if (last_error != TERR_BLACKHOLE)
+ 				{
+-					syslog (LOG_INFO, _("No reply from Teredo server"));
+ 					last_error = TERR_BLACKHOLE;
+ 				}
+ 
+ 				if (c_state->up)
+ 				{
+-					syslog (LOG_NOTICE, _("Lost Teredo connectivity"));
+ 					c_state->up = false;
+ 					m->state.cb (c_state, m->state.opaque);
+ 					server_ip = 0;
+@@ -376,7 +370,6 @@
+ 			{
+ 				memcpy(c_state, &newst, sizeof (*c_state));
+ 
+-				syslog (LOG_NOTICE, _("New Teredo address/MTU"));
+ 				m->state.cb (c_state, m->state.opaque);
+ 			}
+ 
+diff -uNr a/libteredo/packets.c b/libteredo/packets.c
+--- a/libteredo/packets.c	2013-05-23 23:40:42.000000000 +0800
++++ b/libteredo/packets.c	2018-12-04 20:47:43.598028317 +0800
+@@ -215,7 +215,6 @@
+ 			if (newaddr->teredo.server_ip != 0)
+ 			{
+ 				/* The Teredo specification excludes multiple prefixes */
+-				syslog (LOG_ERR, _("Multiple Teredo prefixes received"));
+ 				return -1;
+ 			}
+ 
+diff -uNr a/libteredo/server.c b/libteredo/server.c
+--- a/libteredo/server.c	2012-09-12 21:03:59.000000000 +0800
++++ b/libteredo/server.c	2018-12-04 20:47:58.862159104 +0800
+@@ -512,15 +512,12 @@
+ 
+ 	if (raw_fd == -1)
+ 	{
+-		syslog (LOG_ERR, _("Raw IPv6 socket not working: %m"));
+ 		return NULL;
+ 	}
+ 
+ 	/* Initializes exclusive UDP/IPv4 sockets */
+ 	if (!is_ipv4_global_unicast (ip1) || !is_ipv4_global_unicast (ip2))
+ 	{
+-		syslog (LOG_ERR, _("Teredo server UDP socket error: "
+-		        "Server IPv4 addresses must be global unicast."));
+ 		return NULL;
+ 	}
+ 
+diff -uNr a/libtun6/tun6.c b/libtun6/tun6.c
+--- a/libtun6/tun6.c	2012-09-12 21:03:59.000000000 +0800
++++ b/libtun6/tun6.c	2018-12-04 20:48:23.750375571 +0800
+@@ -65,8 +65,8 @@
+ };
+ 
+ # include <net/route.h> // struct in6_rtmsg
+-# include <netinet/if_ether.h> // ETH_P_IPV6
+-
++/*# include <netinet/if_ether.h> // ETH_P_IPV6
++*/
+ typedef struct
+ {
+ 	uint16_t flags;
+@@ -195,9 +195,6 @@
+ 	{
+ 		syslog (LOG_ERR, _("Tunneling driver error (%s): %m"), "TUNSETIFF");
+ 		if (errno == EBUSY)
+-			syslog (LOG_INFO,
+-			        _("Please make sure another instance of the program is "
+-	        	          "not already running."));
+ 		goto error;
+ 	}
+ 
+diff -uNr a/src/miredo.c b/src/miredo.c
+--- a/src/miredo.c	2009-11-06 03:06:18.000000000 +0800
++++ b/src/miredo.c	2018-12-04 20:48:37.910500446 +0800
+@@ -144,7 +144,6 @@
+ 
+ 		closelog ();
+ 		openlog (miredo_name, LOG_PID | LOG_PERROR, facility);
+-		syslog (LOG_INFO, _("Starting..."));
+ 
+ 		// Starts the main miredo process
+ 		pid_t pid = fork ();
+diff -uNr a/src/relayd.c b/src/relayd.c
+--- a/src/relayd.c	2013-05-23 23:40:42.000000000 +0800
++++ b/src/relayd.c	2018-12-04 20:48:46.086573100 +0800
+@@ -285,7 +285,6 @@
+ {
+ 	char str[INET6_ADDRSTRLEN];
+ 
+-	syslog (LOG_NOTICE, _("Teredo pseudo-tunnel started"));
+ 	if (inet_ntop (AF_INET6, addr, str, sizeof (str)) != NULL)
+ 		syslog (LOG_INFO, _(" (address: %s, MTU: %"PRIu16")"),
+ 		        str, mtu);
+@@ -306,7 +305,6 @@
+ 
+ 	configure_tunnel (((miredo_tunnel *)data)->priv_fd, &in6addr_any,
+ 	                         1280);
+-	syslog (LOG_NOTICE, _("Teredo pseudo-tunnel stopped"));
+ }
+ 
+ 
+@@ -447,7 +445,6 @@
+ 	int mode = TEREDO_CLIENT;
+ 	if (!ParseRelayType (conf, "RelayType", &mode))
+ 	{
+-		syslog (LOG_ALERT, _("Fatal configuration error"));
+ 		return -2;
+ 	}
+ 
+@@ -466,8 +463,6 @@
+ 			char *name = miredo_conf_get (conf, "ServerAddress", NULL);
+ 			if (name == NULL)
+ 			{
+-				syslog (LOG_ALERT, _("Server address not specified"));
+-				syslog (LOG_ALERT, _("Fatal configuration error"));
+ 				return -2;
+ 			}
+ 			strlcpy (namebuf, name, sizeof (namebuf));
+@@ -498,7 +493,6 @@
+ 		                                      &prefix.teredo.prefix)
+ 		 || !miredo_conf_get_int16 (conf, "InterfaceMTU", &mtu, NULL))
+ 		{
+-			syslog (LOG_ALERT, _("Fatal configuration error"));
+ 			return -2;
+ 		}
+ 	}
+@@ -522,7 +516,6 @@
+ 	if (!miredo_conf_parse_IPv4 (conf, "BindAddress", &bind_ip)
+ 	 || !miredo_conf_get_int16 (conf, "BindPort", &bind_port, NULL))
+ 	{
+-		syslog (LOG_ALERT, _("Fatal configuration error"));
+ 		return -2;
+ 	}
+ 
+diff -uNr a/src/serverd.c b/src/serverd.c
+--- a/src/serverd.c	2009-03-01 04:17:14.000000000 +0800
++++ b/src/serverd.c	2018-12-04 20:48:52.262628242 +0800
+@@ -91,15 +91,12 @@
+ 		if (!miredo_conf_parse_IPv4 (conf, "ServerBindAddress", &server_ip)
+ 		 || !miredo_conf_parse_IPv4 (conf, "ServerBindAddress2", &server_ip2))
+ 		{
+-			syslog (LOG_ALERT, _("Fatal configuration error"));
+ 			return -2;
+ 		}
+ 	}
+ 
+ 	if (server_ip == INADDR_ANY)
+ 	{
+-		syslog (LOG_ALERT, _("Server address not specified"));
+-		syslog (LOG_ALERT, _("Fatal configuration error"));
+ 		return -2;
+ 	}
+ 
+@@ -117,7 +114,6 @@
+ 	                                      &prefix.teredo.prefix)
+ 	 || !miredo_conf_get_int16 (conf, "InterfaceMTU", &mtu, NULL))
+ 	{
+-		syslog (LOG_ALERT, _("Fatal configuration error"));
+ 		return -2;
+ 	}
+ 
+@@ -154,9 +150,6 @@
+ 		teredo_server_destroy (server);
+ 	}
+ 
+-	syslog (LOG_ALERT, _("Teredo server fatal error"));
+-	syslog (LOG_NOTICE, _("Make sure another instance "
+-	        "of the program is not already running."));
+ 	return -1;
+ }
+ 
